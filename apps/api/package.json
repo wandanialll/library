@@ -1,0 +1,28 @@
+{
+  "name": "api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose -f ../../infra/docker-compose.db.yml up -d",
+    "db:down": "docker compose -f ../../infra/docker-compose.db.yml down",
+    "db:logs": "docker compose -f ../../infra/docker-compose.db.yml logs -f postgres",
+    "stack:up": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml up -d --build",
+    "stack:down": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml down",
+    "stack:logs": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml logs -f",
+    "migrate:json-to-db": "tsx src/scripts/migrate-json-to-db.ts"
+  },
+  "dependencies": {
+    "pg": "^8.22.0",
+    "tsx": "^4.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/pg": "^8.20.0",
+    "typescript": "~6"
+  }
+}

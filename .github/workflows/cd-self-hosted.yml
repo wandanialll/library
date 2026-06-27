@@ -1,0 +1,46 @@
+name: CD Self-Hosted
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  deploy:
+    if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_PATH != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          script: |
+            set -e
+
+            REPO_URL="${{ github.server_url }}/${{ github.repository }}.git"
+            BRANCH="${{ github.ref_name }}"
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+
+            if [ ! -d "$DEPLOY_PATH/.git" ]; then
+              mkdir -p "$DEPLOY_PATH"
+              git clone "$REPO_URL" "$DEPLOY_PATH"
+            fi
+
+            cd "$DEPLOY_PATH"
+            git fetch --all --prune
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            if [ ! -f .env ]; then
+              cp infra/.env.compose.example .env
+            fi
+
+            docker compose --env-file .env -f infra/docker-compose.app.yml up -d --build
+
+            docker compose --env-file .env -f infra/docker-compose.app.yml exec -T api node dist/scripts/migrate-json-to-db.js || true

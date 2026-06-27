@@ -1,0 +1,60 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: library-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+  postgres:
+    image: postgres:16
+    container_name: library-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-library}
+      POSTGRES_USER: ${POSTGRES_USER:-library}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-library_dev_password}
+    volumes:
+      - library_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-library} -d ${POSTGRES_DB:-library}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: library-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: ${PORT:-3001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-change-me}
+      AUTH_SECRET: ${AUTH_SECRET:-dev-secret-change}
+      AUTH_TOKEN_TTL_SECONDS: ${AUTH_TOKEN_TTL_SECONDS:-86400}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-20971520}
+      DATABASE_URL: ${DATABASE_URL:-postgres://library:library_dev_password@postgres:5432/library}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      - library_api_data:/app/apps/api/data
+
+volumes:
+  library_postgres_data:
+  library_api_data:
