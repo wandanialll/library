@@ -9,6 +9,14 @@ type LoginResponse = {
   expiresIn: number
 }
 
+type CreatePostInput = {
+  title: string
+  caption: string
+  mediaType: "photo" | "model"
+  fileName: string
+  dataUrl: string
+}
+
 const apiBaseUrl = import.meta.env.VITE_LIBRARY_API_BASE_URL ?? "/api"
 const authTokenStorageKey = "library.authToken"
 
@@ -69,4 +77,36 @@ export async function fetchLibraryPosts(signal?: AbortSignal) {
     ...post,
     assetUrl: resolveAssetUrl(post.assetUrl),
   }))
+}
+
+export async function createLibraryPost(
+  input: CreatePostInput,
+  signal?: AbortSignal
+) {
+  const token = getAuthToken()
+
+  if (!token) {
+    throw new Error("You must be logged in to create a post")
+  }
+
+  const response = await fetch(`${apiBaseUrl}/posts`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to create post: ${response.status}`)
+  }
+
+  const payload = (await response.json()) as LibraryPost
+
+  return {
+    ...payload,
+    assetUrl: resolveAssetUrl(payload.assetUrl),
+  }
 }

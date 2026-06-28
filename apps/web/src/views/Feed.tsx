@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type ChangeEvent } from "react"
 
 import { Post } from "@/components/post.component.tsx"
-import { fetchLibraryPosts } from "@/lib/library-api"
+import { createLibraryPost, fetchLibraryPosts } from "@/lib/library-api"
 import type { LibraryPost } from "@/lib/library-types"
 import { Plus } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
@@ -17,6 +17,76 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
   const [posts, setPosts] = useState<LibraryPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+
+  function readFileAsDataUrl(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(new Error("Failed to read selected file"))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function inferMediaType(file: File) {
+    const lowerName = file.name.toLowerCase()
+
+    if (file.type === "model/gltf-binary" || lowerName.endsWith(".glb")) {
+      return "model" as const
+    }
+
+    return "photo" as const
+  }
+
+  function requestUpload() {
+    if (!isAuthenticated) {
+      onLoginRequest()
+      return
+    }
+
+    setUploadMessage(null)
+    uploadInputRef.current?.click()
+  }
+
+  async function handleUploadSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    setIsUploading(true)
+    setUploadMessage(null)
+
+    try {
+      const mediaType = inferMediaType(file)
+      const dataUrl = await readFileAsDataUrl(file)
+      const defaultTitle = file.name.replace(/\.[^.]+$/, "")
+      const title =
+        window.prompt("Post title", defaultTitle)?.trim() || defaultTitle
+      const caption = window.prompt("Caption", "")?.trim() || ""
+
+      const createdPost = await createLibraryPost({
+        title,
+        caption,
+        mediaType,
+        fileName: file.name,
+        dataUrl,
+      })
+
+      setPosts((current) => [createdPost, ...current])
+      setUploadMessage("Post published")
+    } catch (error) {
+      setUploadMessage(
+        error instanceof Error ? error.message : "Failed to create post"
+      )
+    } finally {
+      setIsUploading(false)
+      event.target.value = ""
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -46,6 +116,14 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,model/gltf-binary,.glb"
+        className="hidden"
+        onChange={handleUploadSelection}
+      />
+
       <section className="flex flex-col gap-4 rounded-none border border-border/70 bg-background/85 p-5 shadow-[0_18px_80px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:p-6 dark:bg-background/70">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
@@ -76,13 +154,22 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.location.reload()}
+              onClick={requestUpload}
+              disabled={!isAuthenticated || isUploading}
             >
               Import scan
             </Button>
-            <Button size="sm" disabled={!isAuthenticated}>
+            <Button
+              size="sm"
+              disabled={!isAuthenticated || isUploading}
+              onClick={requestUpload}
+            >
               <Plus />
-              {isAuthenticated ? "New post" : "Login to post"}
+              {isUploading
+                ? "Uploading..."
+                : isAuthenticated
+                  ? "New post"
+                  : "Login to post"}
             </Button>
           </div>
         </div>
@@ -97,6 +184,7 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
             <span>
               {isAuthenticated ? "Uploader enabled" : "Read only mode"}
             </span>
+            {uploadMessage ? <span>{uploadMessage}</span> : null}
           </CardContent>
         </Card>
       </section>
