@@ -231,20 +231,6 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
             </Button>
           </div>
         </div>
-
-        {/* <Card className="border-border/60 bg-muted/30">
-          <CardContent className="flex flex-wrap gap-4 py-4 text-xs text-muted-foreground">
-            <span>
-              {isLoading ? "Loading posts..." : `${posts.length} posts`}
-            </span>
-            <span>1 photo source</span>
-            <span>1 GLB scan source</span>
-            <span>
-              {isAuthenticated ? "Uploader enabled" : "Read only mode"}
-            </span>
-            {uploadMessage ? <span>{uploadMessage}</span> : null}
-          </CardContent>
-        </Card> */}
       </section>
 
       <section className="grid gap-6">

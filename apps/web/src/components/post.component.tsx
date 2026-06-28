@@ -1,17 +1,10 @@
-import {
-  ArrowsOut,
-  BookmarkSimple,
-  ChatCircle,
-  Heart,
-  ShareNetwork,
-} from "@phosphor-icons/react"
+import { ArrowsOut } from "@phosphor-icons/react"
 import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
@@ -89,28 +82,6 @@ export function Post({ post }: PostProps) {
             {post.caption}
           </p>
         </CardContent>
-
-        {/* <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm">
-            <Heart />
-            {post.stats.likes}
-          </Button>
-          <Button variant="outline" size="sm">
-            <ChatCircle />
-            {post.stats.comments}
-          </Button>
-          <Button variant="outline" size="sm">
-            <BookmarkSimple />
-            {post.stats.saves}
-          </Button>
-        </div>
-
-        <Button variant="ghost" size="sm" className="sm:ml-auto">
-          <ShareNetwork />
-          Share
-        </Button>
-      </CardFooter> */}
       </Card>
 
       <Dialog open={isExpandedOpen} onOpenChange={setIsExpandedOpen}>
