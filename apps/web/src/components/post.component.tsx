@@ -1,9 +1,11 @@
 import {
+  ArrowsOut,
   BookmarkSimple,
   ChatCircle,
   Heart,
   ShareNetwork,
 } from "@phosphor-icons/react"
+import { useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Card,
@@ -13,6 +15,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
 
 import type { LibraryPost } from "@/lib/library-types"
 
@@ -31,44 +40,57 @@ type PostProps = {
 }
 
 export function Post({ post }: PostProps) {
+  const [isExpandedOpen, setIsExpandedOpen] = useState(false)
+
   return (
-    <Card className="overflow-hidden border-border/70 bg-background/90 shadow-[0_12px_60px_rgba(0,0,0,0.08)]">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>{post.title}</CardTitle>
-            <CardDescription>
-              {post.author} · {formatPublishedAt(post.createdAt)} ·{" "}
-              {post.mediaType === "model" ? "3D scan" : "photo"}
-            </CardDescription>
+    <>
+      <Card className="overflow-hidden border-border/70 bg-background/90 shadow-[0_12px_60px_rgba(0,0,0,0.08)]">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle>{post.title}</CardTitle>
+              <CardDescription>
+                {post.author} · {formatPublishedAt(post.createdAt)} ·{" "}
+                {post.mediaType === "model" ? "3D scan" : "photo"}
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="rounded-none border border-border bg-muted px-2.5 py-1 text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+                {post.mediaType}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsExpandedOpen(true)}
+              >
+                <ArrowsOut />
+                Expand
+              </Button>
+            </div>
           </div>
+        </CardHeader>
 
-          <span className="rounded-none border border-border bg-muted px-2.5 py-1 text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
-            {post.mediaType}
-          </span>
-        </div>
-      </CardHeader>
+        <CardContent className="space-y-4">
+          {post.mediaType === "photo" ? (
+            <div className="overflow-hidden border border-border/60 bg-muted/20">
+              <img
+                src={post.assetUrl}
+                alt={post.title}
+                className="h-[480px] w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          ) : (
+            <GlbViewer src={post.assetUrl} alt={post.title} />
+          )}
 
-      <CardContent className="space-y-4">
-        {post.mediaType === "photo" ? (
-          <div className="overflow-hidden border border-border/60 bg-muted/20">
-            <img
-              src={post.assetUrl}
-              alt={post.title}
-              className="h-[480px] w-full object-cover"
-              loading="lazy"
-            />
-          </div>
-        ) : (
-          <GlbViewer src={post.assetUrl} alt={post.title} />
-        )}
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+            {post.caption}
+          </p>
+        </CardContent>
 
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-          {post.caption}
-        </p>
-      </CardContent>
-
-      <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* <CardFooter className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm">
             <Heart />
@@ -88,7 +110,36 @@ export function Post({ post }: PostProps) {
           <ShareNetwork />
           Share
         </Button>
-      </CardFooter>
-    </Card>
+      </CardFooter> */}
+      </Card>
+
+      <Dialog open={isExpandedOpen} onOpenChange={setIsExpandedOpen}>
+        <DialogContent className="h-[92dvh] w-[96vw] max-w-[96vw] overflow-auto p-5 sm:w-[92vw] sm:max-w-[92vw] sm:p-6 lg:w-[88vw] lg:max-w-[88vw] xl:w-[84vw] xl:max-w-[84vw]">
+          <DialogHeader>
+            <DialogTitle>{post.title}</DialogTitle>
+            <DialogDescription>
+              {post.author} · {formatPublishedAt(post.createdAt)} ·{" "}
+              {post.mediaType === "model" ? "3D scan" : "photo"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {post.mediaType === "photo" ? (
+            <div className="overflow-hidden border border-border/60 bg-muted/20">
+              <img
+                src={post.assetUrl}
+                alt={post.title}
+                className="h-auto max-h-[calc(92dvh-12rem)] w-full object-contain lg:max-h-[calc(92dvh-10rem)]"
+              />
+            </div>
+          ) : (
+            <GlbViewer src={post.assetUrl} alt={post.title} />
+          )}
+
+          <p className="text-sm leading-6 text-muted-foreground sm:text-base">
+            {post.caption}
+          </p>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

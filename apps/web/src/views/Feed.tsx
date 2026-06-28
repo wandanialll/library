@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react"
 
 import { Post } from "@/components/post.component.tsx"
+import { PostDialog } from "@/components/dialog.component.tsx"
 import { createLibraryPost, fetchLibraryPosts } from "@/lib/library-api"
 import type { LibraryPost } from "@/lib/library-types"
 import { Plus } from "@phosphor-icons/react"
@@ -13,6 +14,12 @@ type FeedProps = {
   onLogout: () => void
 }
 
+type PendingUpload = {
+  mediaType: "photo" | "model"
+  fileName: string
+  dataUrl: string
+}
+
 export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
   const [posts, setPosts] = useState<LibraryPost[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -20,6 +27,11 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  // replacing current dialog prompts with proper modal dialog. one dialog for both title and caption.
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [postTitle, setPostTitle] = useState("")
+  const [postCaption, setPostCaption] = useState("")
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null)
 
   function readFileAsDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
@@ -64,27 +76,64 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
       const mediaType = inferMediaType(file)
       const dataUrl = await readFileAsDataUrl(file)
       const defaultTitle = file.name.replace(/\.[^.]+$/, "")
-      const title =
-        window.prompt("Post title", defaultTitle)?.trim() || defaultTitle
-      const caption = window.prompt("Caption", "")?.trim() || ""
-
-      const createdPost = await createLibraryPost({
-        title,
-        caption,
+      setPostTitle(defaultTitle)
+      setPostCaption("")
+      setPendingUpload({
         mediaType,
         fileName: file.name,
         dataUrl,
       })
+      setIsDialogOpen(true)
+    } catch (error) {
+      setUploadMessage(
+        error instanceof Error ? error.message : "Failed to prepare upload"
+      )
+    } finally {
+      setIsUploading(false)
+      event.target.value = ""
+    }
+  }
+
+  async function handleSubmitPost() {
+    if (!pendingUpload) {
+      return
+    }
+
+    setIsUploading(true)
+    setUploadMessage(null)
+
+    try {
+      const createdPost = await createLibraryPost({
+        title:
+          postTitle.trim() || pendingUpload.fileName.replace(/\.[^.]+$/, ""),
+        caption: postCaption.trim(),
+        mediaType: pendingUpload.mediaType,
+        fileName: pendingUpload.fileName,
+        dataUrl: pendingUpload.dataUrl,
+      })
 
       setPosts((current) => [createdPost, ...current])
       setUploadMessage("Post published")
+      setIsDialogOpen(false)
+      setPendingUpload(null)
+      setPostTitle("")
+      setPostCaption("")
     } catch (error) {
       setUploadMessage(
         error instanceof Error ? error.message : "Failed to create post"
       )
     } finally {
       setIsUploading(false)
-      event.target.value = ""
+    }
+  }
+
+  function handleDialogOpenChange(open: boolean) {
+    setIsDialogOpen(open)
+
+    if (!open && !isUploading) {
+      setPendingUpload(null)
+      setPostTitle("")
+      setPostCaption("")
     }
   }
 
@@ -124,19 +173,28 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
         onChange={handleUploadSelection}
       />
 
+      <PostDialog
+        isOpen={isDialogOpen}
+        onOpenChange={handleDialogOpenChange}
+        title={postTitle}
+        caption={postCaption}
+        isSubmitting={isUploading}
+        onTitleChange={setPostTitle}
+        onCaptionChange={setPostCaption}
+        onSubmit={handleSubmitPost}
+      />
+
       <section className="flex flex-col gap-4 rounded-none border border-border/70 bg-background/85 p-5 shadow-[0_18px_80px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:p-6 dark:bg-background/70">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
             <p className="text-xs tracking-[0.32em] text-muted-foreground uppercase">
-              Library
+              Danial's Library
             </p>
             <h1 className="font-heading text-3xl leading-tight sm:text-4xl">
-              Photos and scans, presented like a feed, with 3D models that you
-              can rotate and zoom.
+              Photos and scans.
             </h1>
             <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-              Connected to your live backend so posts, media, and auth all run
-              through the same production data path.
+              Browse my library :D
             </p>
           </div>
 
@@ -174,7 +232,7 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
           </div>
         </div>
 
-        <Card className="border-border/60 bg-muted/30">
+        {/* <Card className="border-border/60 bg-muted/30">
           <CardContent className="flex flex-wrap gap-4 py-4 text-xs text-muted-foreground">
             <span>
               {isLoading ? "Loading posts..." : `${posts.length} posts`}
@@ -186,7 +244,7 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
             </span>
             {uploadMessage ? <span>{uploadMessage}</span> : null}
           </CardContent>
-        </Card>
+        </Card> */}
       </section>
 
       <section className="grid gap-6">
@@ -197,6 +255,14 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
                 Feed is unavailable right now because the API request failed.
               </p>
               <p>{errorMessage}</p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {uploadMessage ? (
+          <Card className="border-border/70 bg-background/80">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              <p>{uploadMessage}</p>
             </CardContent>
           </Card>
         ) : null}
