@@ -1,45 +1,16 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { join, resolve } from "node:path"
+import { randomUUID } from "node:crypto"
 
 import { ensureSchema, getPool, hasDatabaseUrl } from "./db"
-import { seedPosts } from "./data"
 import type { LibraryPost, MediaType } from "./types"
-
-const dataDirectory = resolve(process.cwd(), "data")
-const uploadsDirectory = join(dataDirectory, "uploads")
-const postsFilePath = join(dataDirectory, "posts.json")
-
-let cachedPosts: LibraryPost[] | null = null
-
-async function ensureStorage() {
-  await mkdir(uploadsDirectory, { recursive: true })
-}
-
-async function readPostsFromDisk() {
-  await ensureStorage()
-
-  try {
-    const raw = await readFile(postsFilePath, "utf8")
-    return JSON.parse(raw) as LibraryPost[]
-  } catch {
-    await writeFile(postsFilePath, JSON.stringify(seedPosts, null, 2), "utf8")
-    return seedPosts
-  }
-}
-
-async function savePosts(posts: LibraryPost[]) {
-  await ensureStorage()
-  await writeFile(postsFilePath, JSON.stringify(posts, null, 2), "utf8")
-}
 
 function mapPostRow(row: {
   id: string
   title: string
   caption: string
-  author: string
+  author_name: string
   created_at: string
   media_type: MediaType
-  asset_url: string
+  media_asset_id: string
   likes: number
   comments: number
   saves: number
@@ -48,10 +19,10 @@ function mapPostRow(row: {
     id: row.id,
     title: row.title,
     caption: row.caption,
-    author: row.author,
+    author: row.author_name,
     createdAt: new Date(row.created_at).toISOString(),
     mediaType: row.media_type,
-    assetUrl: row.asset_url,
+    assetUrl: `/assets/media/${row.media_asset_id}`,
     stats: {
       likes: Number(row.likes ?? 0),
       comments: Number(row.comments ?? 0),
@@ -61,117 +32,31 @@ function mapPostRow(row: {
 }
 
 async function readPostsFromDb() {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required")
+  }
+
   await ensureSchema()
   const result = await getPool().query(
     `
       SELECT
-        id,
-        title,
-        caption,
-        author,
-        created_at,
-        media_type,
-        asset_url,
-        likes,
-        comments,
-        saves
-      FROM posts
+        posts.id,
+        posts.title,
+        posts.caption,
+        users.display_name AS author_name,
+        posts.created_at,
+        posts.media_type,
+        posts.media_asset_id,
+        posts.likes,
+        posts.comments,
+        posts.saves
+      FROM app_posts AS posts
+      INNER JOIN users ON users.id = posts.user_id
       ORDER BY created_at DESC
     `
   )
 
-  if (result.rowCount === 0) {
-    await seedDatabaseIfEmpty()
-
-    const seededResult = await getPool().query(
-      `
-        SELECT
-          id,
-          title,
-          caption,
-          author,
-          created_at,
-          media_type,
-          asset_url,
-          likes,
-          comments,
-          saves
-        FROM posts
-        ORDER BY created_at DESC
-      `
-    )
-
-    return seededResult.rows.map(mapPostRow)
-  }
-
   return result.rows.map(mapPostRow)
-}
-
-async function seedDatabaseIfEmpty() {
-  await ensureSchema()
-
-  for (const post of seedPosts) {
-    await getPool().query(
-      `
-        INSERT INTO posts (
-          id,
-          title,
-          caption,
-          author,
-          created_at,
-          media_type,
-          asset_url,
-          likes,
-          comments,
-          saves
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        ON CONFLICT (id) DO NOTHING
-      `,
-      [
-        post.id,
-        post.title,
-        post.caption,
-        post.author,
-        post.createdAt,
-        post.mediaType,
-        post.assetUrl,
-        post.stats.likes,
-        post.stats.comments,
-        post.stats.saves,
-      ]
-    )
-  }
-}
-
-function fileExtensionFromMimeType(
-  mimeType: string,
-  fallbackFileName?: string
-) {
-  if (mimeType === "image/png") {
-    return ".png"
-  }
-
-  if (mimeType === "image/jpeg") {
-    return ".jpg"
-  }
-
-  if (mimeType === "image/webp") {
-    return ".webp"
-  }
-
-  if (mimeType === "model/gltf-binary") {
-    return ".glb"
-  }
-
-  if (fallbackFileName) {
-    const extension = fallbackFileName.toLowerCase().match(/\.[a-z0-9]+$/)
-    if (extension) {
-      return extension[0]
-    }
-  }
-
-  return ""
 }
 
 function sanitizeBaseName(value: string) {
@@ -208,28 +93,50 @@ export type CreatePostInput = {
 }
 
 export async function getPosts() {
-  if (hasDatabaseUrl()) {
-    return readPostsFromDb()
-  }
-
-  if (cachedPosts) {
-    return cachedPosts
-  }
-
-  cachedPosts = await readPostsFromDisk()
-  return cachedPosts
+  return readPostsFromDb()
 }
 
 export async function createPost(input: CreatePostInput) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required")
+  }
+
   const { mimeType, buffer } = decodeDataUrl(input.dataUrl)
-  const extension = fileExtensionFromMimeType(mimeType, input.fileName)
   const slug = sanitizeBaseName(input.title || input.fileName || "upload")
   const id = `${slug}-${Date.now()}`
-  const assetFileName = `${id}${extension}`
-  const assetPath = join(uploadsDirectory, assetFileName)
+  const assetId = randomUUID()
 
-  await ensureStorage()
-  await writeFile(assetPath, buffer)
+  await ensureSchema()
+
+  const authorResult = await getPool().query<{ id: string }>(
+    `
+      SELECT id
+      FROM users
+      WHERE username = $1
+      LIMIT 1
+    `,
+    [input.author]
+  )
+
+  const authorId = authorResult.rows[0]?.id
+
+  if (!authorId) {
+    throw new Error("Author account not found")
+  }
+
+  await getPool().query(
+    `
+      INSERT INTO media_assets (
+        id,
+        mime_type,
+        original_file_name,
+        byte_size,
+        binary_data
+      )
+      VALUES ($1,$2,$3,$4,$5)
+    `,
+    [assetId, mimeType, input.fileName, buffer.length, buffer]
+  )
 
   const nextPost: LibraryPost = {
     id,
@@ -238,7 +145,7 @@ export async function createPost(input: CreatePostInput) {
     author: input.author,
     createdAt: new Date().toISOString(),
     mediaType: input.mediaType,
-    assetUrl: `/assets/uploads/${assetFileName}`,
+    assetUrl: `/assets/media/${assetId}`,
     stats: {
       likes: input.likes ?? 0,
       comments: input.comments ?? 0,
@@ -246,47 +153,67 @@ export async function createPost(input: CreatePostInput) {
     },
   }
 
-  if (hasDatabaseUrl()) {
-    await ensureSchema()
-
-    await getPool().query(
-      `
-        INSERT INTO posts (
-          id,
-          title,
-          caption,
-          author,
-          created_at,
-          media_type,
-          asset_url,
-          likes,
-          comments,
-          saves
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      `,
-      [
-        nextPost.id,
-        nextPost.title,
-        nextPost.caption,
-        nextPost.author,
-        nextPost.createdAt,
-        nextPost.mediaType,
-        nextPost.assetUrl,
-        nextPost.stats.likes,
-        nextPost.stats.comments,
-        nextPost.stats.saves,
-      ]
-    )
-
-    return nextPost
-  }
-
-  const posts = await getPosts()
-
-  const nextPosts = [nextPost, ...posts]
-  cachedPosts = nextPosts
-  await savePosts(nextPosts)
+  await getPool().query(
+    `
+      INSERT INTO app_posts (
+        id,
+        user_id,
+        media_asset_id,
+        title,
+        caption,
+        created_at,
+        media_type,
+        likes,
+        comments,
+        saves
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+    [
+      nextPost.id,
+      authorId,
+      assetId,
+      nextPost.title,
+      nextPost.caption,
+      nextPost.createdAt,
+      nextPost.mediaType,
+      nextPost.stats.likes,
+      nextPost.stats.comments,
+      nextPost.stats.saves,
+    ]
+  )
 
   return nextPost
+}
+
+export async function getMediaAssetById(assetId: string) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required")
+  }
+
+  await ensureSchema()
+
+  const result = await getPool().query<{
+    mime_type: string
+    binary_data: Buffer
+  }>(
+    `
+      SELECT mime_type, binary_data
+      FROM media_assets
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [assetId]
+  )
+
+  const row = result.rows[0]
+
+  if (!row) {
+    return null
+  }
+
+  return {
+    mimeType: row.mime_type,
+    buffer: row.binary_data,
+  }
 }

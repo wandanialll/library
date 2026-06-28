@@ -1,10 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { createServer } from "node:http"
-import { readFile } from "node:fs/promises"
-import { extname, join, resolve } from "node:path"
 
 import { checkDatabaseHealth } from "./db"
-import { createPost, getPosts, type CreatePostInput } from "./store"
+import {
+  createPost,
+  getMediaAssetById,
+  getPosts,
+  type CreatePostInput,
+} from "./store"
 import type { LibraryPost } from "./types"
 
 const port = Number(process.env.PORT ?? 3001)
@@ -14,8 +17,6 @@ const authUsername = process.env.AUTH_USERNAME ?? "admin"
 const authPassword = process.env.AUTH_PASSWORD ?? "change-me"
 const authSecret = process.env.AUTH_SECRET ?? "dev-secret-change"
 const authTokenTtlSeconds = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 86400)
-const mockDataDirectory = resolve(process.cwd(), "../../mock_data")
-const uploadsDirectory = resolve(process.cwd(), "data", "uploads")
 
 type LoginRequest = {
   username: string
@@ -112,14 +113,19 @@ function verifyToken(token: string) {
   }
 
   if (!timingSafeEqual(expectedBuffer, actualBuffer)) {
-    return false
+    return null
   }
 
   try {
     const payload = JSON.parse(fromBase64Url(payloadBase64)) as AuthTokenPayload
-    return payload.exp > Math.floor(Date.now() / 1000)
+
+    if (payload.exp <= Math.floor(Date.now() / 1000)) {
+      return null
+    }
+
+    return payload
   } catch {
-    return false
+    return null
   }
 }
 
@@ -157,7 +163,6 @@ function isCreatePostInput(value: unknown): value is CreatePostInput {
   return (
     typeof input.title === "string" &&
     typeof input.caption === "string" &&
-    typeof input.author === "string" &&
     (input.mediaType === "photo" || input.mediaType === "model") &&
     typeof input.fileName === "string" &&
     typeof input.dataUrl === "string"
@@ -166,34 +171,27 @@ function isCreatePostInput(value: unknown): value is CreatePostInput {
 
 async function serveAsset(
   response: import("node:http").ServerResponse,
-  assetName: string,
+  assetId: string,
   sendBody = true
 ) {
-  if (assetName.includes("..")) {
+  if (!assetId || assetId.includes("..")) {
     throw new Error("Invalid asset path")
   }
 
-  const filePath = assetName.startsWith("uploads/")
-    ? join(uploadsDirectory, assetName.slice("uploads/".length))
-    : join(mockDataDirectory, assetName)
-  const fileBuffer = await readFile(filePath)
-  const extension = extname(filePath).toLowerCase()
+  const asset = await getMediaAssetById(assetId)
 
-  const contentType =
-    extension === ".png"
-      ? "image/png"
-      : extension === ".glb"
-        ? "model/gltf-binary"
-        : "application/octet-stream"
+  if (!asset) {
+    throw new Error("Asset not found")
+  }
 
   response.writeHead(200, {
-    "Content-Type": contentType,
+    "Content-Type": asset.mimeType,
     "Cache-Control": "public, max-age=86400",
     "Access-Control-Allow-Origin": allowedOrigin,
   })
 
   if (sendBody) {
-    response.end(fileBuffer)
+    response.end(asset.buffer)
     return
   }
 
@@ -264,7 +262,9 @@ const server = createServer(async (request, response) => {
   if (pathname === "/posts" && request.method === "POST") {
     const bearerToken = parseBearerToken(request.headers.authorization)
 
-    if (!bearerToken || !verifyToken(bearerToken)) {
+    const tokenPayload = bearerToken ? verifyToken(bearerToken) : null
+
+    if (!tokenPayload) {
       sendJson(response, 401, { message: "Unauthorized" })
       return
     }
@@ -277,7 +277,7 @@ const server = createServer(async (request, response) => {
         return
       }
 
-      const post = await createPost(body)
+      const post = await createPost({ ...body, author: tokenPayload.sub })
       sendJson(response, 201, post)
     } catch (error) {
       if (error instanceof Error) {
@@ -314,13 +314,13 @@ const server = createServer(async (request, response) => {
   }
 
   if (
-    pathname.startsWith("/assets/") &&
+    pathname.startsWith("/assets/media/") &&
     ["GET", "HEAD"].includes(request.method ?? "GET")
   ) {
-    const assetName = decodeURIComponent(pathname.slice("/assets/".length))
+    const assetId = decodeURIComponent(pathname.slice("/assets/media/".length))
 
     try {
-      await serveAsset(response, assetName, request.method !== "HEAD")
+      await serveAsset(response, assetId, request.method !== "HEAD")
     } catch {
       sendJson(response, 404, { message: "Asset not found" })
     }
@@ -332,7 +332,7 @@ const server = createServer(async (request, response) => {
     sendText(
       response,
       200,
-      "Library API is running. Use GET /health, POST /auth/login, GET /posts, POST /posts, GET /posts/:id, and GET /assets/:fileName."
+      "Library API is running. Use GET /health, POST /auth/login, GET /posts, POST /posts, GET /posts/:id, and GET /assets/media/:assetId."
     )
     return
   }

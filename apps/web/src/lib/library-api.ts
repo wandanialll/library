@@ -1,4 +1,4 @@
-import { libraryPosts, type LibraryPost } from "./library-data"
+import type { LibraryPost } from "./library-data"
 
 type PostsResponse = {
   posts: LibraryPost[]
@@ -57,20 +57,16 @@ export async function login(
 }
 
 export async function fetchLibraryPosts(signal?: AbortSignal) {
-  try {
-    const response = await fetch(`${apiBaseUrl}/posts`, { signal })
+  const response = await fetch(`${apiBaseUrl}/posts`, { signal })
 
-    if (!response.ok) {
-      throw new Error(`Failed to load posts: ${response.status}`)
-    }
-
-    const payload = (await response.json()) as PostsResponse
-
-    return payload.posts.map((post) => ({
-      ...post,
-      assetUrl: resolveAssetUrl(post.assetUrl),
-    }))
-  } catch {
-    return libraryPosts
+  if (!response.ok) {
+    throw new Error(`Failed to load posts: ${response.status}`)
   }
+
+  const payload = (await response.json()) as PostsResponse
+
+  return payload.posts.map((post) => ({
+    ...post,
+    assetUrl: resolveAssetUrl(post.assetUrl),
+  }))
 }

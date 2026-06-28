@@ -106,7 +106,7 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
           <Card className="border-dashed border-border/70 bg-background/80">
             <CardContent className="space-y-2 py-8 text-sm text-muted-foreground">
               <p>
-                Feed loaded from fallback data because the API request failed.
+                Feed is unavailable right now because the API request failed.
               </p>
               <p>{errorMessage}</p>
             </CardContent>

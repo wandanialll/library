@@ -30,14 +30,35 @@ export async function ensureSchema() {
 
   try {
     await client.query(`
-      CREATE TABLE IF NOT EXISTS posts (
+      CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'admin',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_assets (
+        id TEXT PRIMARY KEY,
+        mime_type TEXT NOT NULL,
+        original_file_name TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        binary_data BYTEA NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_posts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        media_asset_id TEXT NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
         title TEXT NOT NULL,
         caption TEXT NOT NULL,
-        author TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL,
         media_type TEXT NOT NULL CHECK (media_type IN ('photo', 'model')),
-        asset_url TEXT NOT NULL,
         likes INTEGER NOT NULL DEFAULT 0,
         comments INTEGER NOT NULL DEFAULT 0,
         saves INTEGER NOT NULL DEFAULT 0
@@ -45,13 +66,36 @@ export async function ensureSchema() {
     `)
 
     await client.query(
-      "CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts (created_at DESC)"
+      "CREATE INDEX IF NOT EXISTS app_posts_created_at_idx ON app_posts (created_at DESC)"
     )
+    await client.query(
+      "CREATE INDEX IF NOT EXISTS app_posts_user_id_idx ON app_posts (user_id)"
+    )
+    await client.query(
+      "CREATE INDEX IF NOT EXISTS app_posts_media_asset_id_idx ON app_posts (media_asset_id)"
+    )
+
+    await ensureAdminUser(client)
 
     schemaReady = true
   } finally {
     client.release()
   }
+}
+
+async function ensureAdminUser(client: {
+  query: (queryText: string, values?: unknown[]) => Promise<unknown>
+}) {
+  const username = process.env.AUTH_USERNAME ?? "admin"
+
+  await client.query(
+    `
+      INSERT INTO users (id, username, display_name, role)
+      VALUES ($1, $2, $3, 'admin')
+      ON CONFLICT (id) DO NOTHING
+    `,
+    [username, username, username]
+  )
 }
 
 export async function checkDatabaseHealth() {
