@@ -253,6 +253,14 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
           </Card>
         ) : null}
 
+        {isLoading ? (
+          <Card className="border-dashed border-border/70 bg-background/80">
+            <CardContent className="py-8 text-sm text-muted-foreground">
+              <p>Loading posts…</p>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {posts.map((post) => (
           <Post key={post.id} post={post} />
         ))}
