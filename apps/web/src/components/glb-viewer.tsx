@@ -86,7 +86,10 @@ export function GlbViewer({ src, alt }: GlbViewerProps) {
         </Button>
       </div>
 
-      <div key={resetToken} className="relative h-[28rem] w-full bg-muted/10">
+      <div
+        key={resetToken}
+        className="relative h-[20rem] w-full bg-muted/10 sm:h-[28rem]"
+      >
         <ViewerErrorBoundary>
           {React.createElement("model-viewer", {
             ref: viewerRef,
@@ -97,9 +100,14 @@ export function GlbViewer({ src, alt }: GlbViewerProps) {
             "interaction-prompt": "none",
             "shadow-intensity": "1",
             exposure: "1",
-            "camera-orbit": "0deg 75deg 2.8m",
-            "field-of-view": "45deg",
-            className: "h-full w-full",
+            "camera-target": "auto auto auto",
+            "camera-orbit": "0deg 75deg auto",
+            "min-camera-orbit": "auto auto auto",
+            "max-camera-orbit": "auto auto auto",
+            "field-of-view": "auto",
+            "min-field-of-view": "20deg",
+            "max-field-of-view": "90deg",
+            className: "block h-full w-full",
           })}
 
           {!isLoaded ? (
