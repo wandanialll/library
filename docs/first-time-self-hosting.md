@@ -178,13 +178,15 @@ On PR and push to `master`/`main`:
 
 ### 8.2 CD behavior
 
-On push to `master`/`main` (or manual dispatch), CD job will:
+On manual dispatch, CD job will:
 
-1. SSH to your server.
-2. Clone/pull latest code in `DEPLOY_PATH`.
-3. Create `.env` from template if missing.
-4. Run compose deploy (`up -d --build`).
-5. Run migration script in the API container.
+1. Require a `release_tag` input.
+2. SSH to your server.
+3. Clone/pull repository in `DEPLOY_PATH`.
+4. Verify the requested release tag exists and checkout that tag.
+5. Require `.env` to already exist on the server.
+6. Run compose deploy (`up -d --build`).
+7. Run migration script in the API container.
 
 ### 8.3 Required GitHub repository secrets
 

@@ -7,8 +7,21 @@ import type { LibraryPost } from "../types"
 const postsFilePath = resolve(process.cwd(), "data", "posts.json")
 
 async function readJsonPosts() {
-  const raw = await readFile(postsFilePath, "utf8")
-  return JSON.parse(raw) as LibraryPost[]
+  try {
+    const raw = await readFile(postsFilePath, "utf8")
+    return JSON.parse(raw) as LibraryPost[]
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return []
+    }
+
+    throw error
+  }
 }
 
 async function run() {

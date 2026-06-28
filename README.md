@@ -106,7 +106,7 @@ Compose files and templates:
 Workflows included:
 
 - `/.github/workflows/ci.yml`: runs install, typecheck, and build on push/PR.
-- `/.github/workflows/cd-self-hosted.yml`: optional deploy over SSH to your own host.
+- `/.github/workflows/cd-self-hosted.yml`: manual deploy over SSH from an explicit release tag.
 
 For CD, configure these GitHub repo secrets:
 
@@ -118,10 +118,11 @@ For CD, configure these GitHub repo secrets:
 
 Deployment workflow behavior:
 
-1. Pull latest code on your server.
-2. Create `.env` from `infra/.env.compose.example` if missing.
-3. Run `docker compose -f infra/docker-compose.app.yml up -d --build`.
-4. Run JSON-to-DB migration inside the API container (safe/no-op on conflicts).
+1. Trigger CD manually and provide a `release_tag` input (for example `v1.2.0`).
+2. Pull that tag on your server and deploy from the tagged revision.
+3. Require an existing server `.env` file.
+4. Run `docker compose -f infra/docker-compose.app.yml up -d --build`.
+5. Run JSON-to-DB migration inside the API container (safe/no-op on conflicts).
 
 ### Notes
 

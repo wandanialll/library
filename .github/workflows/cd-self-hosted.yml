@@ -2,15 +2,19 @@ name: CD Self-Hosted
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-      - main
+    inputs:
+      release_tag:
+        description: Release tag to deploy (for example v1.2.0)
+        required: true
+        type: string
 
 jobs:
   deploy:
     if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_PATH != '' }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
 
     steps:
       - name: Deploy over SSH
@@ -24,8 +28,13 @@ jobs:
             set -e
 
             REPO_URL="${{ github.server_url }}/${{ github.repository }}.git"
-            BRANCH="${{ github.ref_name }}"
+            RELEASE_TAG="${{ inputs.release_tag }}"
             DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+
+            if [ -z "$RELEASE_TAG" ]; then
+              echo "release_tag input is required"
+              exit 1
+            fi
 
             if [ ! -d "$DEPLOY_PATH/.git" ]; then
               mkdir -p "$DEPLOY_PATH"
@@ -33,12 +42,18 @@ jobs:
             fi
 
             cd "$DEPLOY_PATH"
-            git fetch --all --prune
-            git checkout "$BRANCH"
-            git reset --hard "origin/$BRANCH"
+            git fetch --all --prune --tags
+
+            if ! git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+              echo "Tag '$RELEASE_TAG' not found in repository"
+              exit 1
+            fi
+
+            git checkout --detach "refs/tags/$RELEASE_TAG"
 
             if [ ! -f .env ]; then
-              cp infra/.env.compose.example .env
+              echo ".env is missing at $DEPLOY_PATH/.env. Create it before deploying."
+              exit 1
             fi
 
             docker compose --env-file .env -f infra/docker-compose.app.yml up -d --build
