@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 
-import type { LibraryPost } from "@/lib/library-data"
+import type { LibraryPost } from "@/lib/library-types"
 
 import { GlbViewer } from "./glb-viewer"
 

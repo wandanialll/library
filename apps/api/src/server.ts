@@ -1,7 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { createServer } from "node:http"
 
-import { checkDatabaseHealth } from "./db"
+import {
+  checkDatabaseHealth,
+  findAuthUserByUsername,
+  hasDatabaseUrl,
+  verifyPassword,
+} from "./db"
 import {
   createPost,
   getMediaAssetById,
@@ -13,8 +18,6 @@ import type { LibraryPost } from "./types"
 const port = Number(process.env.PORT ?? 3001)
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES ?? 20 * 1024 * 1024)
 const allowedOrigin = process.env.CORS_ORIGIN ?? "*"
-const authUsername = process.env.AUTH_USERNAME ?? "admin"
-const authPassword = process.env.AUTH_PASSWORD ?? "change-me"
 const authSecret = process.env.AUTH_SECRET ?? "dev-secret-change"
 const authTokenTtlSeconds = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 86400)
 
@@ -97,11 +100,11 @@ function parseBearerToken(authorizationHeader: string | undefined) {
   return token
 }
 
-function verifyToken(token: string) {
+function verifyToken(token: string): AuthTokenPayload | null {
   const [payloadBase64, signature] = token.split(".")
 
   if (!payloadBase64 || !signature) {
-    return false
+    return null
   }
 
   const expectedSignature = signTokenPayload(payloadBase64)
@@ -109,7 +112,7 @@ function verifyToken(token: string) {
   const actualBuffer = Buffer.from(signature)
 
   if (expectedBuffer.length !== actualBuffer.length) {
-    return false
+    return null
   }
 
   if (!timingSafeEqual(expectedBuffer, actualBuffer)) {
@@ -235,14 +238,27 @@ const server = createServer(async (request, response) => {
 
   if (pathname === "/auth/login" && request.method === "POST") {
     try {
+      if (!hasDatabaseUrl()) {
+        sendJson(response, 503, {
+          message: "Authentication requires DATABASE_URL",
+        })
+        return
+      }
+
       const body = await readJsonBody<LoginRequest>(request)
 
-      if (body.username !== authUsername || body.password !== authPassword) {
+      const user = await findAuthUserByUsername(body.username)
+
+      if (
+        !user ||
+        !user.passwordHash ||
+        !verifyPassword(body.password, user.passwordHash)
+      ) {
         sendJson(response, 401, { message: "Invalid credentials" })
         return
       }
 
-      const token = createToken(body.username)
+      const token = createToken(user.username)
       sendJson(response, 200, {
         token,
         expiresIn: authTokenTtlSeconds,

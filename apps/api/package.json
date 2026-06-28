@@ -13,8 +13,7 @@
     "db:logs": "docker compose -f ../../infra/docker-compose.db.yml logs -f postgres",
     "stack:up": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml up -d --build",
     "stack:down": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml down",
-    "stack:logs": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml logs -f",
-    "migrate:json-to-db": "tsx src/scripts/migrate-json-to-db.ts"
+    "stack:logs": "docker compose --env-file ../../infra/.env.compose.example -f ../../infra/docker-compose.app.yml logs -f"
   },
   "dependencies": {
     "pg": "^8.22.0",

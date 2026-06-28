@@ -42,7 +42,7 @@ MAX_BODY_BYTES=20971520
 DATABASE_URL=postgres://user:password@localhost:5432/library
 ```
 
-If `DATABASE_URL` is set, the API uses PostgreSQL for post metadata and auto-creates the `posts` table on startup access. If `DATABASE_URL` is not set, it falls back to the existing local JSON storage in `apps/api/data/posts.json`.
+`DATABASE_URL` is required for runtime. The API uses PostgreSQL only and auto-creates `users`, `media_assets`, and `app_posts` on startup access.
 
 ## Self-managed database mode
 
@@ -65,13 +65,7 @@ npm run db:up --workspace apps/api
 
 3. Run API with `DATABASE_URL` set.
 
-4. Optional: migrate existing JSON posts into Postgres:
-
-```bash
-npm run migrate:json-to-db --workspace apps/api
-```
-
-5. Stop Postgres when needed:
+4. Stop Postgres when needed:
 
 ```bash
 npm run db:down --workspace apps/api
@@ -122,7 +116,6 @@ Deployment workflow behavior:
 2. Pull that tag on your server and deploy from the tagged revision.
 3. Require an existing server `.env` file.
 4. Run `docker compose -f infra/docker-compose.app.yml up -d --build`.
-5. Run JSON-to-DB migration inside the API container (safe/no-op on conflicts).
 
 ### Notes
 
@@ -133,7 +126,7 @@ Deployment workflow behavior:
 
 - `POST /auth/login` returns a bearer token.
 - `POST /posts` now requires `Authorization: Bearer <token>`.
-- `GET /posts`, `GET /posts/:id`, and `GET /assets/:name` remain public.
+- `GET /posts`, `GET /posts/:id`, and `GET /assets/media/:assetId` remain public.
 
 ### Frontend login page
 

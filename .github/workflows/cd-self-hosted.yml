@@ -57,5 +57,3 @@ jobs:
             fi
 
             docker compose --env-file .env -f infra/docker-compose.app.yml up -d --build
-
-            docker compose --env-file .env -f infra/docker-compose.app.yml exec -T api node dist/scripts/migrate-json-to-db.js || true

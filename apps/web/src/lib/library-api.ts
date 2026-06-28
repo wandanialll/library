@@ -1,4 +1,4 @@
-import type { LibraryPost } from "./library-data"
+import type { LibraryPost } from "./library-types"
 
 type PostsResponse = {
   posts: LibraryPost[]

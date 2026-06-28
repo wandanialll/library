@@ -138,12 +138,6 @@ Bring up stack:
 docker compose --env-file .env -f infra/docker-compose.app.yml up -d --build
 ```
 
-Run migration (safe to run repeatedly):
-
-```bash
-docker compose --env-file .env -f infra/docker-compose.app.yml exec -T api node dist/scripts/migrate-json-to-db.js
-```
-
 Check logs:
 
 ```bash
@@ -186,7 +180,6 @@ On manual dispatch, CD job will:
 4. Verify the requested release tag exists and checkout that tag.
 5. Require `.env` to already exist on the server.
 6. Run compose deploy (`up -d --build`).
-7. Run migration script in the API container.
 
 ### 8.3 Required GitHub repository secrets
 
@@ -266,8 +259,8 @@ Recommendations on Pi:
 2. Confirm branch is `master` or `main`.
 3. Check Actions logs for SSH key/permission issues.
 
-### Migration script fails
+### Empty feed after first deploy
 
-1. Ensure API container is built and running.
-2. Ensure DB is reachable.
-3. Re-run migration after fixing env; it is conflict-safe.
+1. This is expected with a fresh empty DB.
+2. Login as admin and create your first post.
+3. Confirm `DATABASE_URL` is correct if posting fails.

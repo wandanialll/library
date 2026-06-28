@@ -1,7 +1,42 @@
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
+
 import { Pool } from "pg"
 
 let pool: Pool | null = null
 let schemaReady = false
+
+type AuthUser = {
+  id: string
+  username: string
+  display_name: string
+  role: string
+  password_hash: string | null
+}
+
+export function hashPassword(password: string) {
+  const salt = randomBytes(16)
+  const derivedKey = scryptSync(password, salt, 64)
+
+  return `scrypt$${salt.toString("base64")}$${derivedKey.toString("base64")}`
+}
+
+export function verifyPassword(password: string, passwordHash: string) {
+  const parts = passwordHash.split("$")
+
+  if (parts.length !== 3 || parts[0] !== "scrypt") {
+    return false
+  }
+
+  const salt = Buffer.from(parts[1], "base64")
+  const expected = Buffer.from(parts[2], "base64")
+  const actual = scryptSync(password, salt, expected.length)
+
+  if (expected.length !== actual.length) {
+    return false
+  }
+
+  return timingSafeEqual(expected, actual)
+}
 
 export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL)
@@ -35,9 +70,14 @@ export async function ensureSchema() {
         username TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'admin',
+        password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `)
+
+    await client.query(
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT"
+    )
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS media_assets (
@@ -87,15 +127,52 @@ async function ensureAdminUser(client: {
   query: (queryText: string, values?: unknown[]) => Promise<unknown>
 }) {
   const username = process.env.AUTH_USERNAME ?? "admin"
+  const password = process.env.AUTH_PASSWORD ?? "change-me"
+  const passwordHash = hashPassword(password)
 
   await client.query(
     `
-      INSERT INTO users (id, username, display_name, role)
-      VALUES ($1, $2, $3, 'admin')
-      ON CONFLICT (id) DO NOTHING
+      INSERT INTO users (id, username, display_name, role, password_hash)
+      VALUES ($1, $2, $3, 'admin', $4)
+      ON CONFLICT (username) DO UPDATE
+      SET display_name = EXCLUDED.display_name,
+          role = 'admin',
+          password_hash = EXCLUDED.password_hash
     `,
-    [username, username, username]
+    [username, username, username, passwordHash]
   )
+}
+
+export async function findAuthUserByUsername(username: string) {
+  if (!hasDatabaseUrl()) {
+    return null
+  }
+
+  await ensureSchema()
+
+  const result = await getPool().query<AuthUser>(
+    `
+      SELECT id, username, display_name, role, password_hash
+      FROM users
+      WHERE username = $1
+      LIMIT 1
+    `,
+    [username]
+  )
+
+  const user = result.rows[0]
+
+  if (!user) {
+    return null
+  }
+
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name,
+    role: user.role,
+    passwordHash: user.password_hash,
+  }
 }
 
 export async function checkDatabaseHealth() {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import { Post } from "@/components/post.component.tsx"
 import { fetchLibraryPosts } from "@/lib/library-api"
-import type { LibraryPost } from "@/lib/library-data"
+import type { LibraryPost } from "@/lib/library-types"
 import { Plus } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent } from "@workspace/ui/components/card"
@@ -57,8 +57,8 @@ export function Feed({ isAuthenticated, onLoginRequest, onLogout }: FeedProps) {
               can rotate and zoom.
             </h1>
             <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-              Seeded from your mock data, this layout is ready for a real
-              backend, uploads, and richer post metadata.
+              Connected to your live backend so posts, media, and auth all run
+              through the same production data path.
             </p>
           </div>
 
